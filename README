@@ -1,0 +1,65 @@
+requirement: hbase-0.98.0
+
+1. Install hbase-0.98.0-hadoop2 from apache
+   (also works with hbase-1.0.0 the current stable version)
+
+1.1 Set environment varibles
+1.1.1 Add the hbase-0.98.0-hadoop2/bin directory to your path
+For example you can export new PATH using the following cmd. Or, add the following to ~/.bashrc file if the ~/.bash_profile file exists.
+    export PATH=$PATH:${your_hbase_dir}/bin
+1.1.2 Export JAVA_HOME, if it does not exist.
+    export JAVA_HOME=${your_jdk_home}
+
+1.2 Add hbase.tmp.dir property into configuration label in hbase-0.98.0-hadoop2/conf/hbase-site.xml.
+For example, if /data/hbasedata is the directory to store all hbase data files, please set the hbase-site.xml as the following.
+
+<configuration>
+  <property>
+    <name>hbase.tmp.dir</name>
+    <value>/data/hbasedata</value>
+  </property>
+</configuration>
+
+1.3 Start hbase:
+
+    start-hbase.sh
+
+
+2.    Install the schema using data-loading for mrna and variant call.
+2.1	Download hbase-data-loading
+2.2	unzip hbase-data-loading.zip
+2.3	cd hbase-data-loading/microarray
+2.4	compile java for microarray
+
+javac -classpath `hbase classpath` HBaseTM.java
+
+2.5	initialize microarray schema
+
+java -classpath `hbase classpath`:. HBaseTM init microarray
+
+2.6	insert microarray data
+
+e.g. 
+java -classpath `hbase classpath`:. HBaseTM insertMatrixBySubject microarray GSE1456 datasample/gse1456.patientnum datasample/gse1456.probenames datasample/gse1456.gene datasample/gse1456.data.row 1000
+
+2.7	compile java for vcf data
+
+cd ../vcf
+javac -classpath `hbase classpath` HBaseTM.java HBaseSNP.java
+
+2.8	initialize vcf schema
+
+java -classpath `hbase classpath`:. HBaseTM init vcf
+
+2.9 insert data
+
+cd datasample
+tar xzf 1000384994.tar.gz 
+tar xzf 1000384998.tar.gz
+mv 1000384994 1000384998 ../
+cd ..
+java -classpath `hbase classpath`:. HBaseTM insert vcf CELL-LINE 1000384994 5000
+java -classpath `hbase classpath`:. HBaseTM insert vcf CELL-LINE 1000384998 5000
+
+Note. test data are too large to upload. Please download the data samples from https://www.dropbox.com/s/3b7omfyxdnyfe2x/hbase-data-loading.tar.gz?dl=0
+This archive contains the whole hierarchy of the project to make users easier to understand it. Please find all datasample folders and copy them to the corresponding directories in the latest version, ignoring source code.
