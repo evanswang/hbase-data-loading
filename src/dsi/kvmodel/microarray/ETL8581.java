@@ -214,8 +214,6 @@ public class ETL8581 extends HBaseM {
 	public static void main(String[] args) {
 		
 		ETL8581 etl = new ETL8581("microarray", "localhost", "5432", "postgres", "postgres");
-		etl.init("microarray");
-	
 		etl.loadMappingFile("/data/transmart-data/samples/studies/GSE8581/expression/subject_sample_mapping.tsv");
 		etl.loadOmicsData(args[5]);	
 	}
