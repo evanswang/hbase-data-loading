@@ -43,8 +43,13 @@ public class HBaseM {
 		try {
 			MicroarrayTable = new HTable(config, table);
 		} catch (IOException e) {
-			System.err.println("Table not exist, please initialize the table");
-			//e.printStackTrace();
+			init("microarray");
+			try {
+				MicroarrayTable = new HTable(config, table);
+			} catch (IOException e1) {
+				e1.printStackTrace();
+			}
+			//System.err.println("Table not exist, please initialize the table");
 		}
 	}
 

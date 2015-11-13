@@ -212,6 +212,7 @@ public class ETL8581 extends HBaseM {
 	 * @param args
 	 */
 	public static void main(String[] args) {
+		
 		ETL8581 etl = new ETL8581("microarray", "localhost", "5432", "postgres", "postgres");
 		etl.init("microarray");
 	
