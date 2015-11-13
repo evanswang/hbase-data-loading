@@ -1,0 +1,1 @@
+./runb.sh insertMatrixBySubject microarray-subject GSE1456 /data/dataloading/mdata/gse1456.patientnum /data/dataloading/mdata/gse1456.probenames /data/dataloading/mdata/gse1456.gene /data/dataloading/mdata/gse1456.data.row 10000
