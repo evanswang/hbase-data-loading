@@ -32,7 +32,7 @@ public class ETL8581 extends HBaseM {
 				+ "&autoReconnect=true";
 	}
 	
-	public void loadMappingFile(String mapFileName) {
+	public void loadMappingFile(String mapFileName, String concept_cd) {
 		System.out.println("******* loading map file");
 		BufferedReader mapIn = null;
 		String line = null;
@@ -58,8 +58,8 @@ public class ETL8581 extends HBaseM {
 					//String attr1 = stin.nextToken();
 					//String attr2 = stin.nextToken();
 					//String category_cd = stin.nextToken();
-					
-					sample2subjectMap.put(sample_id, study_id + ":" + subject_id);		
+					System.err.println("study_id " + study_id + " subject_id " + subject_id + " sample_id " + sample_id);
+					sample2subjectMap.put(sample_id, study_id + ":" + concept_cd + ":" + subject_id);		
 			}
 		} catch (FileNotFoundException e) {
 			e.printStackTrace();
@@ -94,8 +94,9 @@ public class ETL8581 extends HBaseM {
 			try {
 				stin = new StringTokenizer(study_subject, ":");
 			} catch (Exception e1) {
-				System.err.println("sample is " + sample);
+				System.err.println("empty sample is " + sample);
 				e1.printStackTrace();
+				continue;
 			}
 			String study = stin.nextToken();
 			String subject_id = stin.nextToken();
@@ -151,7 +152,7 @@ public class ETL8581 extends HBaseM {
 	    			omicsIn = new BufferedReader(new FileReader(fileEntry));
 	    			String header = omicsIn.readLine();
 	    			List<String> sampleList = getSampleList(header);
-	    			List<String> patientList = getPatientList(sampleList);
+	    			//List<String> patientList = getPatientList(sampleList);
 	    			List<Put> putList = new ArrayList<Put>();
     				
     				int count = 0;
@@ -167,26 +168,32 @@ public class ETL8581 extends HBaseM {
 	    						raw = "0";
 	    					}
 	    					count ++;
-	    					    
-	    					Put p = new Put(Bytes.toBytes(patientList.get(i++)));
-	    					p.add(Bytes.toBytes(COL_FAMILY_RAW),
-	    							Bytes.toBytes(probe), Bytes.toBytes(raw));
-	    					p.add(Bytes.toBytes(COL_FAMILY_LOG),
-	    							Bytes.toBytes(probe), Bytes.toBytes(raw));
-	    					p.add(Bytes.toBytes(COL_FAMILY_ZSCORE),
-	    							Bytes.toBytes(probe), Bytes.toBytes(raw));
-	    					putList.add(p);
-	    					if (count % cachesize == 0) {
-	    						System.out.println(count);
-	    						MicroarrayTable.put(putList);
-	    						putList.clear();
-	    						try {
-	    							Thread.sleep(100);
-	    							System.gc();
-	    						} catch (InterruptedException e) {
-	    							e.printStackTrace();
-	    						}
+	    					
+	    					String omicsSample = sampleList.get(i++);
+	    					
+	    					if(sample2subjectMap.containsKey(omicsSample)) {
+	    						Put p = new Put(Bytes.toBytes(sample2subjectMap.get(omicsSample)));
+		    					p.add(Bytes.toBytes(COL_FAMILY_RAW),
+		    							Bytes.toBytes(probe), Bytes.toBytes(raw));
+		    					p.add(Bytes.toBytes(COL_FAMILY_LOG),
+		    							Bytes.toBytes(probe), Bytes.toBytes(raw));
+		    					p.add(Bytes.toBytes(COL_FAMILY_ZSCORE),
+		    							Bytes.toBytes(probe), Bytes.toBytes(raw));
+		    					putList.add(p);
+		    					if (count % cachesize == 0) {
+		    						System.out.println(count);
+		    						MicroarrayTable.put(putList);
+		    						putList.clear();
+		    						try {
+		    							Thread.sleep(100);
+		    							System.gc();
+		    						} catch (InterruptedException e) {
+		    							e.printStackTrace();
+		    						}
+		    					}
 	    					}
+	    					
+	    					
 	    				}
 	    				//System.out.println("count is " + count);
 	    			}
@@ -214,7 +221,7 @@ public class ETL8581 extends HBaseM {
 	public static void main(String[] args) {
 		
 		ETL8581 etl = new ETL8581("microarray", "localhost", "5432", "postgres", "postgres");
-		etl.loadMappingFile("/data/transmart-data/samples/studies/GSE8581/expression/subject_sample_mapping.tsv");
+		etl.loadMappingFile("/data/transmart-data/samples/studies/GSE8581/expression/subject_sample_mapping.tsv", "1340998");
 		etl.loadOmicsData("/data/transmart-data/samples/studies/GSE8581/expression");	
 	}
 
