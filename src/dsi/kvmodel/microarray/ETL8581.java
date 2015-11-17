@@ -58,7 +58,7 @@ public class ETL8581 extends HBaseM {
 					//String attr1 = stin.nextToken();
 					//String attr2 = stin.nextToken();
 					//String category_cd = stin.nextToken();
-					System.err.println("study_id " + study_id + " subject_id " + subject_id + " sample_id " + sample_id);
+					//System.err.println("study_id " + study_id + " subject_id " + subject_id + " sample_id " + sample_id);
 					sample2subjectMap.put(sample_id, study_id + ":" + concept_cd + ":" + subject_id);		
 			}
 		} catch (FileNotFoundException e) {
