@@ -15,16 +15,36 @@ import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.HColumnDescriptor;
 import org.apache.hadoop.hbase.HTableDescriptor;
 import org.apache.hadoop.hbase.client.HBaseAdmin;
+import org.apache.hadoop.hbase.client.HTable;
 import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.ResultScanner;
 import org.apache.hadoop.hbase.client.Scan;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.conf.Configuration;
-public class ETLCellLine extends HBaseSNP {
+public class ETLCellLine {
+	protected static final String COL_FAMILY_INFO = "info";
+	protected static final String COL_FAMILY_SUBJECT = "subject";
+	protected static final String COL_FAMILY_POSITION = "pos";
+	
+	protected static final String RS 			= "rs";
+	protected static final String ALLELES 	= "alleles";
+	protected static final String CHROM 		= "chrom";
+	protected static final String POS 		= "pos";
+	protected static final String STRAND 		= "strand";
+	protected static final String ASSEMBLY 	= "assembly";
+	protected static final String CENTER 		= "center";
+	protected static final String PROTLSID 	= "protLSID";
+	protected static final String ASSAYLSID 	= "assayLSID";
+	protected static final String PANELLSID 	= "panelLSID";
+	protected static final String QCCODE 		= "QCcode";
+	
+	protected HTable snpTable;
+	protected Configuration config;
 	
 	public ETLCellLine(String tablename) throws IOException {
-		super(tablename);
+		config = HBaseConfiguration.create();
+		snpTable = new HTable(config, tablename);
 	}
 	
 	public static void init(String tablename) {
@@ -83,22 +103,22 @@ public class ETLCellLine extends HBaseSNP {
 				String RSID= tokenizer.nextToken();
 				String REFERENCEALLELE= tokenizer.nextToken();
 				Put p = new Put(Bytes.toBytes(trial + ":" + conceptCD + ":" + PATIENTID + ":" + CHROMOSOME + ":" + POSITION));
-				p.add(Bytes.toBytes(COL_FAMILY_POSITION), Bytes.toBytes("SAMPLETYPE"), Bytes.toBytes(SAMPLETYPE));
-				p.add(Bytes.toBytes(COL_FAMILY_POSITION), Bytes.toBytes("TIMEPOINT"), Bytes.toBytes(TIMEPOINT));
-				p.add(Bytes.toBytes(COL_FAMILY_POSITION), Bytes.toBytes("TISSUETYPE"), Bytes.toBytes(TISSUETYPE));
-				p.add(Bytes.toBytes(COL_FAMILY_POSITION), Bytes.toBytes("GPLID"), Bytes.toBytes(GPLID));
-				p.add(Bytes.toBytes(COL_FAMILY_POSITION), Bytes.toBytes("ASSAYID"), Bytes.toBytes(ASSAYID));
-				p.add(Bytes.toBytes(COL_FAMILY_POSITION), Bytes.toBytes("SAMPLECODE"), Bytes.toBytes(SAMPLECODE));
-				p.add(Bytes.toBytes(COL_FAMILY_POSITION), Bytes.toBytes("REFERENCE"), Bytes.toBytes(REFERENCE));
-				p.add(Bytes.toBytes(COL_FAMILY_POSITION), Bytes.toBytes("VARIANTTYPE"), Bytes.toBytes(VARIANTTYPE));
-				p.add(Bytes.toBytes(COL_FAMILY_POSITION), Bytes.toBytes("VARIANT"), Bytes.toBytes(VARIANT));
-				p.add(Bytes.toBytes(COL_FAMILY_POSITION), Bytes.toBytes("RSID"), Bytes.toBytes(RSID));
-				p.add(Bytes.toBytes(COL_FAMILY_POSITION), Bytes.toBytes("REFERENCEALLELE"), Bytes.toBytes(REFERENCEALLELE));
+				p.add(Bytes.toBytes(COL_FAMILY_INFO), Bytes.toBytes("SAMPLETYPE"), Bytes.toBytes(SAMPLETYPE));
+				p.add(Bytes.toBytes(COL_FAMILY_INFO), Bytes.toBytes("TIMEPOINT"), Bytes.toBytes(TIMEPOINT));
+				p.add(Bytes.toBytes(COL_FAMILY_INFO), Bytes.toBytes("TISSUETYPE"), Bytes.toBytes(TISSUETYPE));
+				p.add(Bytes.toBytes(COL_FAMILY_INFO), Bytes.toBytes("GPLID"), Bytes.toBytes(GPLID));
+				p.add(Bytes.toBytes(COL_FAMILY_INFO), Bytes.toBytes("ASSAYID"), Bytes.toBytes(ASSAYID));
+				p.add(Bytes.toBytes(COL_FAMILY_INFO), Bytes.toBytes("SAMPLECODE"), Bytes.toBytes(SAMPLECODE));
+				p.add(Bytes.toBytes(COL_FAMILY_INFO), Bytes.toBytes("REFERENCE"), Bytes.toBytes(REFERENCE));
+				p.add(Bytes.toBytes(COL_FAMILY_INFO), Bytes.toBytes("VARIANTTYPE"), Bytes.toBytes(VARIANTTYPE));
+				p.add(Bytes.toBytes(COL_FAMILY_INFO), Bytes.toBytes("VARIANT"), Bytes.toBytes(VARIANT));
+				p.add(Bytes.toBytes(COL_FAMILY_INFO), Bytes.toBytes("RSID"), Bytes.toBytes(RSID));
+				p.add(Bytes.toBytes(COL_FAMILY_INFO), Bytes.toBytes("REFERENCEALLELE"), Bytes.toBytes(REFERENCEALLELE));
 				count ++;
 				putList.add(p);
 				if (count % cachesize == 0) {
 					System.out.println(count);
-					subindTable.put(putList);
+					snpTable.put(putList);
 					putList.clear();
 					try {
 						Thread.sleep(100);
@@ -138,7 +158,7 @@ public class ETLCellLine extends HBaseSNP {
 		ResultScanner scanner = null;
 		long count = 0;
 		try {
-			scanner = subindTable.getScanner(s);
+			scanner = snpTable.getScanner(s);
 			// Scanners return Result instances.
 			// Now, for the actual iteration. One way is to use a while loop
 			// like so:
