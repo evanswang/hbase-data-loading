@@ -287,17 +287,20 @@ public class ETLCellLine {
 	public static void main(String[] args) throws IOException {
 		if (args[0].equals("init")) {
 			ETLCellLine.init(args[1]);
-		} else if (args[0].equals("insert")) {
+		} else if (args[0].equals("insert-subject")) {
 			ETLCellLine ETLCellLine = new ETLCellLine(args[1]);
 			ETLCellLine.insertSubIndSNP(args[2], args[3], args[4], Integer.parseInt(args[5]));
+		} else if (args[0].equals("insert-position")) {
+			ETLCellLine ETLCellLine = new ETLCellLine(args[1]);
+			ETLCellLine.insertPosSNP(args[2], args[3], args[4], Integer.parseInt(args[5]));
 		} else if (args[0].equals("scan")) {
 			ETLCellLine ETLCellLine = new ETLCellLine(args[1]);
 			ETLCellLine.scanBySub(args[2], args[3], Integer.parseInt(args[4]), Integer.parseInt(args[5]));
 		} else {
 			System.out.println("please input an argument");
-			System.out.println("init for create vcf tables");
+			System.out.println("init for create vcf tables with a parameter tablename");
 			System.out.println("scan for scan a table by subject with parameters the table name, start row name, stop row name, maximum patient number and cache size");
-			System.out.println("insert for insert data into the table with parameters table name, String trial, String subject, long cachesize");
+			System.out.println("insert-subject or insert-position for insert data into the table with parameters table name, String trial, String subject, long cachesize");
 			return;
 		}
 	}
