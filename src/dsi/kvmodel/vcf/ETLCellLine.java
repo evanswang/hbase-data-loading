@@ -27,17 +27,16 @@ public class ETLCellLine {
 	protected static final String COL_FAMILY_SUBJECT = "subject";
 	protected static final String COL_FAMILY_POSITION = "pos";
 	
-	protected static final String RS 			= "rs";
-	protected static final String ALLELES 	= "alleles";
-	protected static final String CHROM 		= "chrom";
+	protected static final String CHROM 	= "chrom";
 	protected static final String POS 		= "pos";
-	protected static final String STRAND 		= "strand";
-	protected static final String ASSEMBLY 	= "assembly";
-	protected static final String CENTER 		= "center";
-	protected static final String PROTLSID 	= "protLSID";
-	protected static final String ASSAYLSID 	= "assayLSID";
-	protected static final String PANELLSID 	= "panelLSID";
-	protected static final String QCCODE 		= "QCcode";
+	protected static final String ID 		= "id";
+	protected static final String REF 		= "ref";
+	protected static final String ALT 		= "alt";
+	protected static final String QUAL 		= "qual";
+	protected static final String FILTER 	= "filter";
+	protected static final String INFO 		= "info";	
+	protected static final String FORMAT 	= "format";
+
 	
 	protected HTable snpTable;
 	protected Configuration config;
@@ -63,6 +62,7 @@ public class ETLCellLine {
 			if (!hadmin.tableExists(tablename)) {
 				subjectTableDesc.addFamily(infoColDesc);
 				subjectTableDesc.addFamily(subColDesc);
+				subjectTableDesc.addFamily(posColDesc);
 				hadmin.createTable(subjectTableDesc);
 			}
 		} catch (IOException e) {
@@ -136,6 +136,97 @@ public class ETLCellLine {
 		} catch (IOException e) {
 			e.printStackTrace();
 		} finally {
+			try {
+				br.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}	
+		}
+	}
+	
+	public void insertPosSNP(String trial, String conceptCD, String filename) {
+		insertPosSNP(trial, conceptCD, filename, 1000);
+	}
+	
+	public void insertPosSNP(String trial, String conceptCD, String filename, long cachesize) {
+		BufferedReader br = null;
+		String str = null;
+		System.out.println(filename);
+		long ts1 = System.currentTimeMillis();
+		System.out.println("start inserting PosSNP at " + ts1);
+
+		int count = 0;
+		try {				
+		
+			List<String> subList = new ArrayList<String>();
+			List<Put> putList = new ArrayList<Put>();
+			br = new BufferedReader(new FileReader(new File(filename)));
+			while ((str = br.readLine()) != null) {
+				StringTokenizer tokenizer = new StringTokenizer(str, "\t");
+				String chrom = tokenizer.nextToken();
+				if (chrom.startsWith("#")) {
+					if (chrom.equals("#CHROM")) {
+						String pos = tokenizer.nextToken();
+						String id = tokenizer.nextToken();
+						String ref = tokenizer.nextToken();
+						String alt = tokenizer.nextToken();
+						String qual = tokenizer.nextToken();
+						String filter = tokenizer.nextToken();
+						String info = tokenizer.nextToken();
+						String format = tokenizer.nextToken();
+						while (tokenizer.hasMoreTokens()) {
+							String subject = tokenizer.nextToken();
+							subList.add(subject);
+						}
+					}
+					continue;
+				} else {
+					String pos = tokenizer.nextToken();
+					String id = tokenizer.nextToken();
+					String ref = tokenizer.nextToken();
+					String alt = tokenizer.nextToken();
+					String qual = tokenizer.nextToken();
+					String filter = tokenizer.nextToken();
+					String info = tokenizer.nextToken();
+					String format = tokenizer.nextToken();	
+					
+					Put p = new Put(Bytes.toBytes(trial + ":" + conceptCD + ":" + chrom  + ":" + pos));	
+					p.add(Bytes.toBytes(COL_FAMILY_INFO), Bytes.toBytes(CHROM), Bytes.toBytes(chrom));
+					p.add(Bytes.toBytes(COL_FAMILY_INFO), Bytes.toBytes(POS), Bytes.toBytes(pos));
+					p.add(Bytes.toBytes(COL_FAMILY_INFO), Bytes.toBytes(ID), Bytes.toBytes(id));
+					p.add(Bytes.toBytes(COL_FAMILY_INFO), Bytes.toBytes(REF), Bytes.toBytes(ref));
+					p.add(Bytes.toBytes(COL_FAMILY_INFO), Bytes.toBytes(ALT), Bytes.toBytes(alt));
+					p.add(Bytes.toBytes(COL_FAMILY_INFO), Bytes.toBytes(QUAL), Bytes.toBytes(qual));
+					p.add(Bytes.toBytes(COL_FAMILY_INFO), Bytes.toBytes(FILTER), Bytes.toBytes(filter));
+					p.add(Bytes.toBytes(COL_FAMILY_INFO), Bytes.toBytes(INFO), Bytes.toBytes(info));
+					p.add(Bytes.toBytes(COL_FAMILY_SUBJECT), Bytes.toBytes(FORMAT), Bytes.toBytes(format));
+									
+					int i = 0;
+					while (tokenizer.hasMoreTokens()) {
+						p.add(Bytes.toBytes(COL_FAMILY_SUBJECT),
+								Bytes.toBytes(subList.get(i++)), Bytes.toBytes(tokenizer.nextToken()));
+					}
+					putList.add(p);
+					count++;
+					if (count % cachesize == 0) {
+						snpTable.put(putList);
+						putList.clear();
+					}
+					if (count % cachesize == 0)
+						System.out.println(count);
+				}
+				snpTable.put(putList);
+				putList.clear();
+			}
+			long ts2 = System.currentTimeMillis();
+			System.out.println("finish time is " + (ts2 - ts1));
+			
+		} catch (FileNotFoundException e) {
+			e.printStackTrace();
+		} catch (IOException e) {
+			e.printStackTrace();
+		} finally {
+			System.out.println("final count is " + count);
 			try {
 				br.close();
 			} catch (IOException e) {
