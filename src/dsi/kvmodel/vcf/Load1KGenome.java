@@ -304,8 +304,8 @@ public class Load1KGenome {
 					loadColName(line, subList);	
 				} else {
 					addSNP2SubjectPutList(line, study, subList, subjectPutList);
-					addSNP2PositionPutList(line, study, subList, subjectPutList);
-					addSNP2CrossPutList(line, study, subList, subjectPutList);
+					addSNP2PositionPutList(line, study, subList, posPutList);
+					addSNP2CrossPutList(line, study, subList, crossPutList);
 					count++;
 					if (count % cachesize == 0) {
 						subjectTable.put(subjectPutList);
