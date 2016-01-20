@@ -194,6 +194,7 @@ public class Load1KGenome {
 			putSubject.add(Bytes.toBytes(COL_FAMILY_GENOTYPE),
 					Bytes.toBytes(chrom + ":" + String.format("%8d", Long.parseLong(pos))), Bytes.toBytes(value));
 			putList.add(putSubject);
+			
 		}	
 	}
 	
