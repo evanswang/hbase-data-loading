@@ -193,7 +193,7 @@ public class Load1KGenome {
 			Put putSubject = new Put(Bytes.toBytes(study + ":" + subList.get(i++)));
 			putSubject.add(Bytes.toBytes(COL_FAMILY_GENOTYPE),
 					Bytes.toBytes(chrom + ":" + String.format("%8d", Long.parseLong(pos))), Bytes.toBytes(value));
-			putList.add(p);
+			putList.add(putSubject);
 		}	
 	}
 	
@@ -233,7 +233,7 @@ public class Load1KGenome {
 			Put putSubject = new Put(Bytes.toBytes(study + ":" + chrom + ":" + String.format("%8d", Long.parseLong(pos))));
 			putSubject.add(Bytes.toBytes(COL_FAMILY_GENOTYPE),
 					Bytes.toBytes(subList.get(i++)), Bytes.toBytes(value));
-			putList.add(p);
+			putList.add(putSubject);
 		}	
 	}
 	
@@ -273,7 +273,7 @@ public class Load1KGenome {
 			Put putSubject = new Put(Bytes.toBytes(chrom + ":" + String.format("%8d", Long.parseLong(pos))  + ":" + study));
 			putSubject.add(Bytes.toBytes(COL_FAMILY_GENOTYPE),
 					Bytes.toBytes(subList.get(i++)), Bytes.toBytes(value));
-			putList.add(p);
+			putList.add(putSubject);
 		}	
 	}
 	
