@@ -1,4 +1,5 @@
 ///@date 19/01/2016
+///@author wsc
 /// loading 1000 Genome VCF data
 
 package dsi.kvmodel.vcf;
@@ -124,10 +125,9 @@ public class Load1KGenome {
 			if (firstElem.equals("ID")) {
 				String id = tokenizer.nextToken();
 				Put p = new Put(Bytes.toBytes(study));
-				while (tokenizer.hasMoreTokens()) {
-					p.add(Bytes.toBytes(htc), Bytes.toBytes(id),
-							Bytes.toBytes(header.split("[<>]")[1]));
-				}
+				p.add(Bytes.toBytes(htc), Bytes.toBytes(id),
+						Bytes.toBytes(header.split("[<>]")[1]));
+
 				headerTable.put(p);
 			} 
 		} else {
@@ -150,13 +150,14 @@ public class Load1KGenome {
 		tokenizer.nextToken();//String alt = tokenizer.nextToken();
 		tokenizer.nextToken();//String qual = tokenizer.nextToken();
 		tokenizer.nextToken();//String filter = tokenizer.nextToken();
+		tokenizer.nextToken();//String info = tokenizer.nextToken();
 		tokenizer.nextToken();//String format = tokenizer.nextToken();
 		while (tokenizer.hasMoreTokens()) {
 			subList.add(tokenizer.nextToken());
 		}
 	}
 	
-	private void loadSNP2SubjectTable(String line, String study, List<String> subList, List<Put> putList) {
+	private void addSNP2SubjectPutList(String line, String study, List<String> subList, List<Put> putList) {
 
 		// allele data
 		StringTokenizer tokenizer = new StringTokenizer(line, "\t");
@@ -167,9 +168,10 @@ public class Load1KGenome {
 		String alt = tokenizer.nextToken();
 		String qual = tokenizer.nextToken();
 		String filter = tokenizer.nextToken();
+		String info = tokenizer.nextToken();
 		String format = tokenizer.nextToken();
 		
-		Put p = new Put(Bytes.toBytes(study + ":" + chrom + ":" + pos));	
+		Put p = new Put(Bytes.toBytes(study + ":" + chrom + ":" + String.format("%8d", Long.parseLong(pos))));	
 		p.add(Bytes.toBytes(COL_FAMILY_INFO),
 				Bytes.toBytes("rs"), Bytes.toBytes(rs));
 		p.add(Bytes.toBytes(COL_FAMILY_INFO),
@@ -180,6 +182,8 @@ public class Load1KGenome {
 				Bytes.toBytes("qual"), Bytes.toBytes(qual));
 		p.add(Bytes.toBytes(COL_FAMILY_INFO),
 				Bytes.toBytes("filter"), Bytes.toBytes(filter));
+		p.add(Bytes.toBytes(COL_FAMILY_INFO),
+				Bytes.toBytes("info"), Bytes.toBytes(info));
 		p.add(Bytes.toBytes(COL_FAMILY_INFO),
 				Bytes.toBytes("format"), Bytes.toBytes(format));
 		putList.add(p);		
@@ -193,20 +197,103 @@ public class Load1KGenome {
 		}	
 	}
 	
-	public void insertSubjectTable(String study, String filename) {
+	private void addSNP2PositionPutList(String line, String study, List<String> subList, List<Put> putList) {
 
+		// allele data
+		StringTokenizer tokenizer = new StringTokenizer(line, "\t");
+		String chrom = tokenizer.nextToken();
+		String pos = tokenizer.nextToken();
+		String rs = tokenizer.nextToken();
+		String ref = tokenizer.nextToken();
+		String alt = tokenizer.nextToken();
+		String qual = tokenizer.nextToken();
+		String filter = tokenizer.nextToken();
+		String info = tokenizer.nextToken();
+		String format = tokenizer.nextToken();
+		
+		Put p = new Put(Bytes.toBytes(study + ":" + chrom + ":" + String.format("%8d", Long.parseLong(pos))));	
+		p.add(Bytes.toBytes(COL_FAMILY_INFO),
+				Bytes.toBytes("rs"), Bytes.toBytes(rs));
+		p.add(Bytes.toBytes(COL_FAMILY_INFO),
+				Bytes.toBytes("ref"), Bytes.toBytes(ref));			
+		p.add(Bytes.toBytes(COL_FAMILY_INFO),
+				Bytes.toBytes("alt"), Bytes.toBytes(alt));
+		p.add(Bytes.toBytes(COL_FAMILY_INFO),
+				Bytes.toBytes("qual"), Bytes.toBytes(qual));
+		p.add(Bytes.toBytes(COL_FAMILY_INFO),
+				Bytes.toBytes("filter"), Bytes.toBytes(filter));
+		p.add(Bytes.toBytes(COL_FAMILY_INFO),
+				Bytes.toBytes("info"), Bytes.toBytes(info));
+		p.add(Bytes.toBytes(COL_FAMILY_INFO),
+				Bytes.toBytes("format"), Bytes.toBytes(format));
+		putList.add(p);		
+		int i = 0;
+		while (tokenizer.hasMoreTokens()) {
+			String value = tokenizer.nextToken();
+			Put putSubject = new Put(Bytes.toBytes(study + ":" + chrom + ":" + String.format("%8d", Long.parseLong(pos))));
+			putSubject.add(Bytes.toBytes(COL_FAMILY_GENOTYPE),
+					Bytes.toBytes(subList.get(i++)), Bytes.toBytes(value));
+			putList.add(p);
+		}	
+	}
+	
+	private void addSNP2CrossPutList(String line, String study, List<String> subList, List<Put> putList) {
+
+		// allele data
+		StringTokenizer tokenizer = new StringTokenizer(line, "\t");
+		String chrom = tokenizer.nextToken();
+		String pos = tokenizer.nextToken();
+		String rs = tokenizer.nextToken();
+		String ref = tokenizer.nextToken();
+		String alt = tokenizer.nextToken();
+		String qual = tokenizer.nextToken();
+		String filter = tokenizer.nextToken();
+		String info = tokenizer.nextToken();
+		String format = tokenizer.nextToken();
+		
+		Put p = new Put(Bytes.toBytes(chrom + ":" + String.format("%8d", Long.parseLong(pos))  + ":" + study));	
+		p.add(Bytes.toBytes(COL_FAMILY_INFO),
+				Bytes.toBytes("rs"), Bytes.toBytes(rs));
+		p.add(Bytes.toBytes(COL_FAMILY_INFO),
+				Bytes.toBytes("ref"), Bytes.toBytes(ref));			
+		p.add(Bytes.toBytes(COL_FAMILY_INFO),
+				Bytes.toBytes("alt"), Bytes.toBytes(alt));
+		p.add(Bytes.toBytes(COL_FAMILY_INFO),
+				Bytes.toBytes("qual"), Bytes.toBytes(qual));
+		p.add(Bytes.toBytes(COL_FAMILY_INFO),
+				Bytes.toBytes("filter"), Bytes.toBytes(filter));
+		p.add(Bytes.toBytes(COL_FAMILY_INFO),
+				Bytes.toBytes("info"), Bytes.toBytes(info));
+		p.add(Bytes.toBytes(COL_FAMILY_INFO),
+				Bytes.toBytes("format"), Bytes.toBytes(format));
+		putList.add(p);		
+		int i = 0;
+		while (tokenizer.hasMoreTokens()) {
+			String value = tokenizer.nextToken();
+			Put putSubject = new Put(Bytes.toBytes(chrom + ":" + String.format("%8d", Long.parseLong(pos))  + ":" + study));
+			putSubject.add(Bytes.toBytes(COL_FAMILY_GENOTYPE),
+					Bytes.toBytes(subList.get(i++)), Bytes.toBytes(value));
+			putList.add(p);
+		}	
+	}
+	
+	public void insert(String study, String filename) {
+		insert(study, filename, 500);
+	}
+	
+	public void insert(String study, String filename, int cachesize) {
 		BufferedReader br = null;
 		GZIPInputStream gzip = null;
 		String line = null;
 		System.out.println(filename);
 		long ts1 = System.currentTimeMillis();
 		System.out.println("start inserting main table at " + ts1);
-		
 		int count = 0;
 		try {				
-		
 			List<String> subList = new ArrayList<String>();
-			List<Put> putList = new ArrayList<Put>();
+			List<Put> subjectPutList = new ArrayList<Put>();
+			List<Put> posPutList = new ArrayList<Put>();
+			List<Put> crossPutList = new ArrayList<Put>();
 			gzip = new GZIPInputStream(new FileInputStream(filename));
 			br = new BufferedReader(new InputStreamReader(gzip));
 			while ((line = br.readLine()) != null) {
@@ -215,17 +302,27 @@ public class Load1KGenome {
 				} else if (line.startsWith("#")) {
 					loadColName(line, subList);	
 				} else {
-					loadSNP2SubjectTable(line, study, subList, putList);
+					addSNP2SubjectPutList(line, study, subList, subjectPutList);
+					addSNP2PositionPutList(line, study, subList, subjectPutList);
+					addSNP2CrossPutList(line, study, subList, subjectPutList);
 					count++;
-					if (count % 500 == 0) {
-						subjectTable.put(putList);
-						putList.clear();
+					if (count % cachesize == 0) {
+						subjectTable.put(subjectPutList);
+						subjectPutList.clear();
+						posTable.put(posPutList);
+						posPutList.clear();
+						crossTable.put(crossPutList);
+						crossPutList.clear();
 					}
 					if (count % 10000 == 0)
 						System.out.println(count);
 				}
-				subjectTable.put(putList);
-				putList.clear();
+				subjectTable.put(subjectPutList);
+				subjectPutList.clear();
+				posTable.put(posPutList);
+				posPutList.clear();
+				crossTable.put(crossPutList);
+				crossPutList.clear();
 			}
 			long ts2 = System.currentTimeMillis();
 			System.out.println("finish time is " + (ts2 - ts1));
@@ -242,7 +339,6 @@ public class Load1KGenome {
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
-			
 		}
 	}
 
@@ -250,7 +346,6 @@ public class Load1KGenome {
 	 * @param args
 	 */
 	public static void main(String[] args) {
-		
 		if (args.length < 1) {
 			System.out.println("please input an argument");
 			System.out.println("init for create new tables");
@@ -263,10 +358,10 @@ public class Load1KGenome {
 		if (args[0].equals("init")) {
 			Load1KGenome.initDataTable(args[1]);
 			Load1KGenome.initHeaderTable();
-		} else if (args[0].equals("scanbypos")) {
+		} else if (args[0].equals("insert")) {
 			try {
 				Load1KGenome loader = new Load1KGenome(args[1]);
-				loader.insertSubjectTable(args[1], args[2]);
+				loader.insert(args[2], args[3]);
 			} catch (MasterNotRunningException e) {
 				e.printStackTrace();
 			} catch (ZooKeeperConnectionException e) {
@@ -274,8 +369,6 @@ public class Load1KGenome {
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
-			
 		}
 	}
-
 }
