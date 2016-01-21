@@ -17,6 +17,7 @@ import java.util.StringTokenizer;
 import java.util.zip.GZIPInputStream;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.HColumnDescriptor;
 import org.apache.hadoop.hbase.HTableDescriptor;
@@ -25,6 +26,9 @@ import org.apache.hadoop.hbase.ZooKeeperConnectionException;
 import org.apache.hadoop.hbase.client.HBaseAdmin;
 import org.apache.hadoop.hbase.client.HTable;
 import org.apache.hadoop.hbase.client.Put;
+import org.apache.hadoop.hbase.client.Result;
+import org.apache.hadoop.hbase.client.ResultScanner;
+import org.apache.hadoop.hbase.client.Scan;
 import org.apache.hadoop.hbase.util.Bytes;
 
 public class Load1KGenome {
@@ -343,6 +347,72 @@ public class Load1KGenome {
 		}
 	}
 
+	public void scan(String startrow, String stoprow, int threshold,
+			int cacheSize) {// only add family
+		// 1kgenome:19:   90974
+		Scan s = new Scan();
+		//s.addFamily(Bytes.toBytes(COL_FAMILY_INFO));
+		//s.addFamily(Bytes.toBytes(COL_FAMILY_SUBJECT));
+		/*
+		for (String qualifier : filterList) {
+			s.addColumn(Bytes.toBytes(COL_FAMILY_RAW), Bytes.toBytes(qualifier));
+		}*/
+		
+		//s.setCacheBlocks(true);
+		//s.setCaching(cacheSize);
+		s.setStartRow(Bytes.toBytes(startrow));
+		s.setStopRow(Bytes.toBytes(stoprow));
+		// s.addColumn(Bytes.toBytes(COL_FAMILY_INFO),
+		// Bytes.toBytes(PATIENT_ID));
+		ResultScanner scanner = null;
+		
+		long count = 0;
+		try {
+			scanner = posTable.getScanner(s);
+			// Scanners return Result instances.
+			// Now, for the actual iteration. One way is to use a while loop
+			// like so:
+			long ts1 = System.currentTimeMillis();
+			for (Result rr = scanner.next(); rr != null; rr = scanner.next()) {
+				// print out the row we found and the columns we were
+				// looking for
+				// System.out.println("Found row: " + rr);
+				if (count == threshold)
+					break;
+				int psnum = 0;
+				for (Cell kv : rr.rawCells()) {
+					psnum++;
+					// each kv represents a column
+					//System.out.println(Bytes.toString(kv.getRowArray()));
+					// System.out.println(Bytes.toString(CellUtil.cloneQualifier(kv)));
+					// System.out.println(Bytes.toString(CellUtil.cloneValue(kv)));
+				}
+				System.out.println(psnum);
+				count++;
+				if (count % 5000 == 0)
+					System.out.println(count);
+				// cache 1000 	= 31.661s / 18.13s 16.052
+				// cache 500	= 31.554s
+				// cache 5000 	= 35.208s
+			}
+			System.out.println("time is " + (System.currentTimeMillis() - ts1));
+			System.out.println("total amount is " + count);
+			// The other approach is to use a foreach loop. Scanners are
+			// iterable!
+			// for (Result rr : scanner) {
+			// System.out.println("Found row: " + rr);
+			// }
+		} catch (IOException e) {
+			e.printStackTrace();
+		} finally {
+			// Make sure you close your scanners when you are done!
+			// Thats why we have it inside a try/finally clause
+			scanner.close();
+		}
+
+	}
+
+	
 	/**
 	 * @param args
 	 */
@@ -350,7 +420,7 @@ public class Load1KGenome {
 		if (args.length < 1) {
 			System.out.println("please input an argument");
 			System.out.println("init for create new tables");
-			//System.out.println("scan for scan a table and you also need input the table name, start row name, stop row name, patient number");
+			System.out.println("scan for scan a table and you also need input the table name, start row name, stop row name, patient number, cache size");
 			System.out.println("insert for insert data into the tables, parameter table name and input data file name");
 			//System.out.println("get for getting record");
 			return;
@@ -363,6 +433,17 @@ public class Load1KGenome {
 			try {
 				Load1KGenome loader = new Load1KGenome(args[1]);
 				loader.insert(args[2], args[3]);
+			} catch (MasterNotRunningException e) {
+				e.printStackTrace();
+			} catch (ZooKeeperConnectionException e) {
+				e.printStackTrace();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		} else if (args[0].equals("scan")) {
+			try {
+				Load1KGenome loader = new Load1KGenome(args[1]);
+				loader.scan(args[2], args[3], Integer.parseInt(args[4]), Integer.parseInt(args[5]));
 			} catch (MasterNotRunningException e) {
 				e.printStackTrace();
 			} catch (ZooKeeperConnectionException e) {
