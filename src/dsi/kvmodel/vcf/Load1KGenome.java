@@ -351,15 +351,15 @@ public class Load1KGenome {
 			int cacheSize) {// only add family
 		// 1kgenome:19:   90974
 		Scan s = new Scan();
-		//s.addFamily(Bytes.toBytes(COL_FAMILY_INFO));
+		s.addFamily(Bytes.toBytes(COL_FAMILY_GENOTYPE));
 		//s.addFamily(Bytes.toBytes(COL_FAMILY_SUBJECT));
 		/*
 		for (String qualifier : filterList) {
 			s.addColumn(Bytes.toBytes(COL_FAMILY_RAW), Bytes.toBytes(qualifier));
 		}*/
 		
-		//s.setCacheBlocks(true);
-		//s.setCaching(cacheSize);
+		s.setCacheBlocks(true);
+		s.setCaching(cacheSize);
 		s.setStartRow(Bytes.toBytes(startrow));
 		s.setStopRow(Bytes.toBytes(stoprow));
 		// s.addColumn(Bytes.toBytes(COL_FAMILY_INFO),
@@ -387,10 +387,12 @@ public class Load1KGenome {
 					// System.out.println(Bytes.toString(CellUtil.cloneQualifier(kv)));
 					// System.out.println(Bytes.toString(CellUtil.cloneValue(kv)));
 				}
-				System.out.println(psnum);
+				//System.out.println(psnum);
 				count++;
-				if (count % 5000 == 0)
+				if (count % cacheSize == 0) {
 					System.out.println(count);
+					System.out.println(System.currentTimeMillis());
+				}
 				// cache 1000 	= 31.661s / 18.13s 16.052
 				// cache 500	= 31.554s
 				// cache 5000 	= 35.208s
