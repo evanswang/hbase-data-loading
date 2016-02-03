@@ -65,7 +65,6 @@ public class HBaseSQL {
     }
 
     /**
-     *
      * @param studyname
      * @param patientname
      * @param annofilename
@@ -98,7 +97,7 @@ public class HBaseSQL {
             while ((line = filein.readLine()) != null) {
                 stin = new StringTokenizer(line, ",");
                 int probeId = 0;
-                while(stin.hasMoreTokens()) {
+                while (stin.hasMoreTokens()) {
                     String raw = stin.nextToken();
                     UUID idOne = UUID.randomUUID();
                     Put p = new Put(Bytes.toBytes(UUID.randomUUID().toString()));
@@ -123,7 +122,7 @@ public class HBaseSQL {
                         putList.clear();
                     }
                 }
-                patientId ++;
+                patientId++;
             }
             System.out.println("final count is " + count);
             MicroarraySQLTable.put(putList);
@@ -197,4 +196,5 @@ public class HBaseSQL {
         } else
             printHelp();
     }
+}
 
