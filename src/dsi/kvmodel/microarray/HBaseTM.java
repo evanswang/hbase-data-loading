@@ -94,18 +94,16 @@ public class HBaseTM {
 
 	public void tableScan(String startrow, String stoprow, int threshold) {
 		try {
-
 			Scan s = new Scan();
 			s.addFamily(Bytes.toBytes(COL_FAMILY_RAW));
 			s.setCacheBlocks(true);
 			s.setCaching(5);
 			s.setStartRow(Bytes.toBytes(startrow));
 			s.setStopRow(Bytes.toBytes(stoprow));
-			//s.setFilter(new ColumnPrefixFilter(Bytes.toBytes("DDR1")));
+			// s.setFilter(new ColumnPrefixFilter(Bytes.toBytes("DDR1")));
 			// s.addColumn(Bytes.toBytes(COL_FAMILY_INFO),
 			// Bytes.toBytes(PATIENT_ID)); 
 			ResultScanner scanner = MicroarrayTable.getScanner(s);
-
 			long count = 0;
 			try {
 				// Scanners return Result instances.
@@ -291,7 +289,11 @@ public class HBaseTM {
 
 	}
 
-	
+    /**
+     * insert matrix from SQL dump file
+     * @param trial
+     * @param filename
+     */
 	public void insertMicroarray(String trial, String filename) {
 		// timestamp, nodename, cpu_usage, node_memory_usage,
 		// node_network_I/O_speed, disk_read_speed, disk_write_speed
@@ -388,6 +390,24 @@ public class HBaseTM {
 	}
     // (END) 16-02-15 Dilshan Silva 
 
+    /**
+     * insert matrix using gene symbol instead of probe.
+     *
+     * __________________________________________________
+     * _____________key_____________________|
+     *   row key     |____column key________|   value
+     * ______________|__family_|_qualifier__|____________
+     *  study:subject|   raw   | gene	    |
+     *               |   log   | gene     	|
+     *               | zscore  | gene	    |
+     *
+     * @param studyname
+     * @param patientname
+     * @param annofilename
+     * @param genefilename gene map file
+     * @param datafilename
+     * @param cachesize
+     */
 	public void insert4MatrixBySubject(String studyname, 
 			String patientname, String annofilename, 
 			String genefilename, String datafilename, long cachesize) {
@@ -872,10 +892,8 @@ public class HBaseTM {
 
 		if (args.length < 1) {
 			System.out.println("please input an argument");
-			System.out
-					.println("init for create a new table with a family info");
-			System.out
-					.println("scan for scan a table and you also need input the table name, start row name, stop row name, patient number");
+			System.out.println("init for create a new table with a family info");
+			System.out.println("scan for scan a table and you also need input the table name, start row name, stop row name, patient number");
 			System.out.println("insert for insert data into the table, parameter table name");
 			System.out.println("get for getting record");
 			return;
@@ -962,3 +980,4 @@ public class HBaseTM {
 	}
 
 }
+
