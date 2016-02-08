@@ -4,11 +4,12 @@
  *
  * Databases like Apache HBase and Google Bigtable can be modeled as Distributed Ordered Table (DOT). DOT horizontally partitions a table into regions and distributes regions to region servers by the Key. DOT further vertically partitions a region into groups (Family) and distributes Families to files (HFile). Multi-dimensional range queries on DOTs are fundamental requirements; however, none of existing data models work well for genetics while considering the three Vs. This thesis introduces a Collabourative Genomic Data Model (GCDM) to solve all these issues. GCDM creates three Collabourative Global Clustering Index Tables (CGCITs) for velocity and variety issues at the cost of limited extra volume. Microarray implementation of GCDM on HBase performed up to 10x faster than the popular SQL model on MySQL Cluster by using 1.5x larger disk space. SNP implementation of GCDM on HBase outperformed the popular SQL model on MySQL Cluster by up to 10 times at the cost of 3x larger volume. Raw sequence implementation of GCDM on HBase shows up to 10-fold velocity increasing by using 3xx larger volume.
  *
+ *
+ *
  */
 
 package dsi.kvmodel.microarray;
 
-import org.apache.avro.generic.GenericData;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.*;
 import org.apache.hadoop.hbase.client.*;
@@ -16,12 +17,10 @@ import org.apache.hadoop.hbase.filter.CompareFilter;
 import org.apache.hadoop.hbase.filter.FilterList;
 import org.apache.hadoop.hbase.filter.SingleColumnValueFilter;
 import org.apache.hadoop.hbase.util.Bytes;
-
 import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.StringTokenizer;
-
 import java.util.UUID;
 
 /**
@@ -64,10 +63,7 @@ public class HBaseSQL {
 
     public HBaseSQL(String table) throws IOException {
         Configuration config = HBaseConfiguration.create();
-        HBaseAdmin hadmin = new HBaseAdmin(config);
-        if (hadmin.tableExists(table)) {
-            MicroarraySQLTable = new HTable(config, table);
-        }
+        MicroarraySQLTable = new HTable(config, table);
     }
 
     public HBaseSQL(String main, String index) throws IOException {
@@ -114,20 +110,18 @@ public class HBaseSQL {
             List<String> paList = new ArrayList<String>();
             List<Put> putList = new ArrayList<Put>();
             while ((line = annoIn.readLine()) != null) {
-                annoList.add(line.substring(1, line.length() - 1));
+                annoList.add(line);
             }
             while ((line = paIn.readLine()) != null) {
                 paList.add(line);
             }
             System.out.println("file " + datafilename);
             int patientId = 0;
-            int autoID = 0;
             while ((line = filein.readLine()) != null) {
                 stin = new StringTokenizer(line, ",");
                 int probeId = 0;
                 while (stin.hasMoreTokens()) {
                     String raw = stin.nextToken();
-                    UUID idOne = UUID.randomUUID();
                     Put p = new Put(Bytes.toBytes(UUID.randomUUID().toString()));
                     p.add(Bytes.toBytes(COL_FAMILY_INFO),
                             Bytes.toBytes("study"), Bytes.toBytes(studyname));
@@ -186,7 +180,8 @@ public class HBaseSQL {
                     break;
                 int psnum = 0;
                 for (Cell kv : rr.rawCells()) {
-                    if (psnum == 0)
+                    if (psnum == 0 && count % cacheSize == 0)
+                        // this count is 1 different from the count print
                         System.out.println(Bytes.toString(CellUtil.cloneRow(kv)));
                     psnum++;
                 }
@@ -220,11 +215,11 @@ public class HBaseSQL {
                         break;
                     int psnum = 0;
                     for (Cell kv : rr.rawCells()) {
-//                        System.out.println(Bytes.toString(CellUtil.cloneRow(kv)) + " : " +
-//                                Bytes.toString(CellUtil.cloneFamily(kv)) + ":" +
-//                                Bytes.toString(CellUtil.cloneQualifier(kv)) + " : " +
-//                                Bytes.toString(CellUtil.cloneValue(kv)));
-                        System.out.println(Bytes.toString(CellUtil.cloneQualifier(kv)));
+                        System.out.println(Bytes.toString(CellUtil.cloneRow(kv)) + " : " +
+                                Bytes.toString(CellUtil.cloneFamily(kv)) + ":" +
+                                Bytes.toString(CellUtil.cloneQualifier(kv)) + " : " +
+                                Bytes.toString(CellUtil.cloneValue(kv)));
+//                        System.out.println(Bytes.toString(CellUtil.cloneQualifier(kv)));
                         psnum++;
                     }
                     count++;
@@ -242,6 +237,11 @@ public class HBaseSQL {
     }
 
     /**
+     System.out.println("* __________________________________________________");
+     System.out.println("* _____________key_____________________|            ");
+     System.out.println("*   row key     |____column key________|    value   ");
+     System.out.println("* ______________|__family_|_qualifier__|____________");
+     System.out.println("*  col1:col2    |  info   | col3       |     id     ");
      * Create composite key secondary index
      * @param col1
      * @param col2 col1 and col2 are composite row key.
@@ -261,11 +261,11 @@ public class HBaseSQL {
             try {
                 long ts1 = System.currentTimeMillis();
                 for (Result rr = scanner.next(); rr != null; rr = scanner.next()) {
-                    int psnum = 0;
                     String id = null;
                     String vCol1 = null;
                     String vCol2 = null;
                     String vCol3 = null;
+                    int psnum = 0;
                     for (Cell kv : rr.rawCells()) {
                         if (psnum == 0)
                             id = Bytes.toString(CellUtil.cloneRow(kv));
@@ -288,16 +288,16 @@ public class HBaseSQL {
 
                     count++;
                     if (count % cacheSize == 0) {
-                        System.out.println(count);
+                        System.out.println(count + "\t" + id);
                         indexTable.put(putList);
                         putList.clear();
                     }
-
                 }
                 indexTable.put(putList);
                 putList.clear();
                 long ts2 = System.currentTimeMillis();
                 System.out.println("Total time is " + (ts2 - ts1));
+                System.out.println(count);
             } finally {
                 scanner.close();
             }
@@ -306,6 +306,13 @@ public class HBaseSQL {
         }
     }
 
+    /**
+     * @date 08/02/2016
+     * load each line as a string and save them as a list
+     * @param filename
+     * @return
+     * @throws IOException
+     */
     private List<String> getSubjectList(String filename) throws IOException {
         BufferedReader br = null;
         String line = null;
@@ -317,7 +324,15 @@ public class HBaseSQL {
         return subjectList;
     }
 
+    /**
+     * return
+     * @param study
+     * @param subjectFile
+     * @param cacheSize
+     * @throws IOException
+     */
     public void searchBySubject(String study, String subjectFile, int cacheSize) throws IOException {
+        long ts1 = System.currentTimeMillis();
         ArrayList<Get> getIndexList = new ArrayList<Get>();
         ArrayList<Get> getDataList = new ArrayList<Get>();
         List<String> paList = getSubjectList(subjectFile);
@@ -325,17 +340,15 @@ public class HBaseSQL {
             Get get = new Get(Bytes.toBytes(study + ":" + subject));
             getIndexList.add(get);
         }
-
-        Result[] results = MicroarraySQLTable.get(getIndexList);
-        for (int i = 0; i < results.length; i++)
+        Result[] results = indexTable.get(getIndexList);
+        for (int i = 0; i < results.length; i++) {
             for (Cell kv : results[i].rawCells()) {
-                String rowkey = Bytes.toString(CellUtil.cloneValue(kv));
-                Get get = new Get(Bytes.toBytes(study + ":" + subject));
+                Get get = new Get(CellUtil.cloneValue(kv));
                 getDataList.add(get);
-                if(getDataList.size() >= cacheSize) {
-                    int psnum = 0;
-                    Result[] resultData = indexTable.get(getDataList);
-                    for (int j = 0; j < results.length; j++) {
+                if (getDataList.size() == cacheSize) {
+                    Result[] resultData = MicroarraySQLTable.get(getDataList);
+                    for (int j = 0; j < resultData.length; j++) {
+                        int psnum = 0;
                         for (Cell kvs : resultData[j].rawCells()) {
                             psnum++;
                         }
@@ -343,6 +356,9 @@ public class HBaseSQL {
                     }
                 }
             }
+        }
+        long ts2 = System.currentTimeMillis();
+        System.out.println("Total time is " + (ts2 - ts1));
     }
 
     /**
@@ -422,9 +438,9 @@ public class HBaseSQL {
         System.out.println("This class implement SQL model in a HBase");
         System.out.println("please input an argument");
         System.out.println("create for creating a new table, parameter table name");
-        System.out.println("insert for inserting data into the table, parameter studyname, patient file, annotation file, data file, cachesize");
-        System.out.println("scan for read data from the table, parameter table, start key, end key, threashold, data file, cachesize");
-        System.out.println("count for count records from the table, parameter table, start key, end key, threashold, data file, cachesize");
+        System.out.println("insert for inserting data into the table, parameter table name, study name, patient file, annotation file, data file, cache size");
+        System.out.println("scan for read data from the table, parameter table, start key, end key, threshold, data file, cache size");
+        System.out.println("count for count records from the table, parameter table, start key, end key, threshold, data file, cache size");
         System.out.println("index for generating secondary index from main table to index table, parameter main table, index table, column 1, column 2, column 3, cache size");
         System.out.println("* __________________________________________________");
         System.out.println("* _____________key_____________________|            ");
@@ -457,5 +473,3 @@ public class HBaseSQL {
             printHelp();
     }
 }
-
-
