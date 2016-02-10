@@ -1,9 +1,12 @@
 /**
  *
- * Molecular profiling based patient stratification plays a crucial role in clinical decision making, such as identification of disease subgroups and prediction of treatment responses of individual subjects. Many existing knowledge management systems like tranSMART enable scientists to do such analysis. But in the big data era, molecular profiling data size increases sharply due to new biological techniques, such as next generation sequencing. None of the existing systems work well whilst considering the three V features of big data (Volume, Variety, and Velocity). Massive scale data stores and collabourating data processing frameworks have been created to deal with the big data deluge. Hadoop Ecosystem, which includes HBase data store and MapReduce framework, has been worldly used for this purpose.
+ * Molecular profiling data based patient stratification plays a crucial role in clinical decision making, such as identification of disease subgroups and prediction of treatment responses of individual subjects. Many existing knowledge management systems like tranSMART enable scientists to do such analysis. But in the big data era, molecular profiling data size increases sharply due to new biological techniques, such as next generation sequencing. None of the existing systems work well whilst considering the three V features of big data (Volume, Variety, and Velocity). Massive scale data stores and collabourating data processing frameworks have been created to deal with the big data deluge. Hadoop Ecosystem, which includes HBase data store and MapReduce framework, has been worldly used for this purpose.
  *
- * Databases like Apache HBase and Google Bigtable can be modeled as Distributed Ordered Table (DOT). DOT horizontally partitions a table into regions and distributes regions to region servers by the Key. DOT further vertically partitions a region into groups (Family) and distributes Families to files (HFile). Multi-dimensional range queries on DOTs are fundamental requirements; however, none of existing data models work well for genetics while considering the three Vs. This thesis introduces a Collabourative Genomic Data Model (GCDM) to solve all these issues. GCDM creates three Collabourative Global Clustering Index Tables (CGCITs) for velocity and variety issues at the cost of limited extra volume. Microarray implementation of GCDM on HBase performed up to 10x faster than the popular SQL model on MySQL Cluster by using 1.5x larger disk space. SNP implementation of GCDM on HBase outperformed the popular SQL model on MySQL Cluster by up to 10 times at the cost of 3x larger volume. Raw sequence implementation of GCDM on HBase shows up to 10-fold velocity increasing by using 3xx larger volume.
+ * Databases like Apache HBase and Google Bigtable can be modeled as Distributed Ordered Table (DOT). DOT horizontally partitions a table into regions and distributes regions to region servers by the Key. DOT further vertically partitions a region into groups (Family) and distributes Families to files (HFile). Multi-dimensional range queries on DOTs are fundamental requirements; however, none of existing data models work well for genetics while considering the three Vs.
  *
+ * A collabourative Genomic Data Model (GCDM) has been introduced to solve all these issues. GCDM creates three Collabourative Global Clustering Index Tables (CGCITs) for velocity and variety issues at the cost of limited extra volume. Microarray implementation of GCDM on HBase performed up to 10x faster than the popular SQL model on MySQL Cluster by using 1.5x larger disk space. SNP implementation of GCDM on HBase outperformed the popular SQL model on MySQL Cluster by up to 10 times at the cost of 3x larger volume. Raw sequence implementation of GCDM on HBase shows up to 10-fold velocity increasing by using 3xx larger volume.
+ *
+ * MapReduce is Single Program Multiple Data (SPMD) programming model and an associated implementation for processing and generating big data with a distributed algorithm on a thousands of nodes cluster. Most molecular profiling data based patient stratification can be parallelized by MapReduce to gain velocity. A popular hierarchical clustering algorithm has been used as an application to indicate how GCDM can influence the velocity of the algorithm.(how)
  *
  *
  */
@@ -317,9 +320,13 @@ public class HBaseSQL {
         BufferedReader br = null;
         String line = null;
         List<String> subjectList = new ArrayList<String>();
-        br = new BufferedReader(new FileReader(new File(filename)));
-        while ((line = br.readLine()) != null) {
-            subjectList.add(line);
+        try {
+            br = new BufferedReader(new FileReader(new File(filename)));
+            while ((line = br.readLine()) != null) {
+                subjectList.add(line);
+            }
+        } finally {
+            br.close();
         }
         return subjectList;
     }
@@ -333,32 +340,50 @@ public class HBaseSQL {
      */
     public void searchBySubject(String study, String subjectFile, int cacheSize) throws IOException {
         long ts1 = System.currentTimeMillis();
-        ArrayList<Get> getIndexList = new ArrayList<Get>();
         ArrayList<Get> getDataList = new ArrayList<Get>();
         List<String> paList = getSubjectList(subjectFile);
+        long count = 0;
         for (String subject : paList) {
             Get get = new Get(Bytes.toBytes(study + ":" + subject));
-            getIndexList.add(get);
-        }
-        Result[] results = indexTable.get(getIndexList);
-        for (int i = 0; i < results.length; i++) {
-            for (Cell kv : results[i].rawCells()) {
-                Get get = new Get(CellUtil.cloneValue(kv));
-                getDataList.add(get);
+            Result result = indexTable.get(get);
+
+            for (Cell kv : result.rawCells()) {
+                Get getData = new Get(CellUtil.cloneValue(kv));
+                getDataList.add(getData);
                 if (getDataList.size() == cacheSize) {
-                    Result[] resultData = MicroarraySQLTable.get(getDataList);
-                    for (int j = 0; j < resultData.length; j++) {
-                        int psnum = 0;
-                        for (Cell kvs : resultData[j].rawCells()) {
-                            psnum++;
-                        }
-                        System.out.println("should be 6 =" + psnum);
-                    }
+                    count += get(getDataList);
+                    getDataList.clear();
+                    System.out.println(count);
                 }
             }
+            if (getDataList.size() == cacheSize) {
+                count += get(getDataList);
+                getDataList.clear();
+                System.out.println(count);
+            }
         }
+        count += get(getDataList);
+        getDataList.clear();
+        System.out.println(count);
+
         long ts2 = System.currentTimeMillis();
         System.out.println("Total time is " + (ts2 - ts1));
+        System.out.println("Total record number is " + count);
+    }
+
+    private long get(List<Get> getDataList) throws IOException {
+        long count = 0;
+        Result[] resultData = MicroarraySQLTable.get(getDataList);
+        for (int j = 0; j < resultData.length; j++) {
+            count++;
+            for (Cell kvs : resultData[j].rawCells()) {
+//                System.out.println(Bytes.toString(CellUtil.cloneRow(kvs)) + " : " +
+//                        Bytes.toString(CellUtil.cloneFamily(kvs)) + " : " +
+//                        Bytes.toString(CellUtil.cloneQualifier(kvs)) + " : " +
+//                        Bytes.toString(CellUtil.cloneValue(kvs)));
+            }
+        }
+        return count;
     }
 
     /**
@@ -442,6 +467,7 @@ public class HBaseSQL {
         System.out.println("scan for read data from the table, parameter table, start key, end key, threshold, data file, cache size");
         System.out.println("count for count records from the table, parameter table, start key, end key, threshold, data file, cache size");
         System.out.println("index for generating secondary index from main table to index table, parameter main table, index table, column 1, column 2, column 3, cache size");
+        System.out.println("search-subject for fetching all records from the main table using the index table, parameter main table, index table, study name, file name, cache size");
         System.out.println("* __________________________________________________");
         System.out.println("* _____________key_____________________|            ");
         System.out.println("*   row key     |____column key________|    value   ");
@@ -469,7 +495,12 @@ public class HBaseSQL {
         } else if (args[0].equals("index")) {
             HBaseSQL sql = new HBaseSQL(args[1], args[2]);
             sql.createIndex(args[3], args[4], args[5], Integer.parseInt(args[6]));
+        } else if (args[0].equals("search-subject")) {
+            HBaseSQL sql = new HBaseSQL(args[1], args[2]);
+            sql.searchBySubject(args[3], args[4], Integer.parseInt(args[5]));
         } else
             printHelp();
     }
 }
+
+
