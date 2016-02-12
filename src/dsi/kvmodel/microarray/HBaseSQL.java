@@ -476,6 +476,7 @@ public class HBaseSQL {
     }
 
     public static void main(String[] args) throws IOException {
+        // good
         if (args.length < 1) {
             printHelp();
             return;
