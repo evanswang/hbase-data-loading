@@ -12,6 +12,7 @@
 
 package dsi.kvmodel.microarray;
 
+import org.apache.avro.generic.GenericData;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.*;
 import org.apache.hadoop.hbase.client.*;
@@ -24,6 +25,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.StringTokenizer;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * Created by sw1111 on 02/02/2016.
@@ -459,6 +461,95 @@ public class HBaseSQL {
         }
     }
 
+    public void scheduler (String study, String probeFileName, int threadNum) {
+        for (int i = 0; i < threadNum; i++) {
+            Runnable r = new MultipleReader(indexTable, MicroarraySQLTable, study, probeFileName);
+            Thread t = new Thread(r);
+            t.start();
+        }
+    }
+
+    private class MultipleReader implements Runnable {
+        private HTable indexTable;
+        private HTable msqlTable;
+        private String filename;
+        private String study;
+        public MultipleReader (HTable indexTable, HTable msqlTable, String study, String filename) {
+            this.indexTable = indexTable;
+            this.msqlTable = msqlTable;
+            this.filename = filename;
+            this.study = study;
+        }
+        public void run() {
+            long ts1 = System.currentTimeMillis();
+            List<String> probeList = new ArrayList<String>();
+            List<Get> getList = new ArrayList<Get>();
+            List<Get> getDataList = new ArrayList<Get>();
+            BufferedReader br = null;
+            String str = null;
+            try {
+                // read all probe list
+                br = new BufferedReader(new FileReader(new File(filename)));
+                while ((str = br.readLine()) != null) {
+                    probeList.add(str);
+                }
+            } catch (FileNotFoundException e1) {
+                e1.printStackTrace();
+            } catch (IOException e) {
+                e.printStackTrace();
+            } finally {
+                try {
+                    br.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+
+            for (int i = 0; i < 100; i++) {
+                Get get = new Get(Bytes.toBytes(study + ":" + probeList.get(ThreadLocalRandom.current().nextInt(0, probeList.size() + 1))));
+                get.addFamily(Bytes.toBytes(COL_FAMILY_INFO));
+                getList.add(get);
+            }
+
+            try {
+                // search index table to get all ids.
+                int psnum = 0;
+                Result[] results = indexTable.get(getList);
+                for (int i = 0; i < results.length; i++)
+                    for (Cell kv : results[i].rawCells()) {
+                        psnum++;
+                        // each kv represents a column
+                        //System.out.println(Bytes.toString(CellUtil.cloneRow(kv)));
+                        //System.out.println(Bytes.toString(CellUtil.cloneFamily(kv)));
+                        //System.out.println(Bytes.toString(CellUtil.cloneQualifier(kv)));
+                        //System.out.println(Bytes.toString(CellUtil.cloneValue(kv)));
+                        getDataList.add(new Get(CellUtil.cloneValue(kv)));
+                    }
+                long ts2 = System.currentTimeMillis();
+                System.out.println("total number is " + psnum
+                        + ". execute time is " + (ts2 - ts1) + ". end time is "
+                        + ts2);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            try {
+                // search data table to get all data.
+                int psnum = 0;
+                Result[] results = msqlTable.get(getDataList);
+                for (int i = 0; i < results.length; i++)
+                    for (Cell kv : results[i].rawCells()) {
+                        psnum++;
+                    }
+                long ts2 = System.currentTimeMillis();
+                System.out.println("total number is " + psnum
+                        + ". execute time is " + (ts2 - ts1) + ". end time is "
+                        + ts2);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
     public static void printHelp() {
         System.out.println("This class implement SQL model in a HBase");
         System.out.println("please input an argument");
@@ -468,6 +559,7 @@ public class HBaseSQL {
         System.out.println("count for count records from the table, parameter table, start key, end key, threshold, data file, cache size");
         System.out.println("index for generating secondary index from main table to index table, parameter main table, index table, column 1, column 2, column 3, cache size");
         System.out.println("search-subject for fetching all records from the main table using the index table, parameter main table, index table, study name, file name, cache size");
+        System.out.println("search-probe for fetching all records from the main table using the index table, parameter main table, index table, study name, file name, cache size");
         System.out.println("* __________________________________________________");
         System.out.println("* _____________key_____________________|            ");
         System.out.println("*   row key     |____column key________|    value   ");
@@ -498,6 +590,10 @@ public class HBaseSQL {
         } else if (args[0].equals("search-subject")) {
             HBaseSQL sql = new HBaseSQL(args[1], args[2]);
             sql.searchBySubject(args[3], args[4], Integer.parseInt(args[5]));
+        } else if (args[0].equals("search-probe")) {
+            // TODO test
+            HBaseSQL sql = new HBaseSQL(args[1], args[2]);
+            sql.scheduler(args[3], args[4], Integer.parseInt(args[5]));
         } else
             printHelp();
     }
