@@ -1,13 +1,12 @@
 /**
  *
- * Molecular profiling data based patient stratification plays a crucial role in clinical decision making, such as identification of disease subgroups and prediction of treatment responses of individual subjects. Many existing knowledge management systems like tranSMART enable scientists to do such analysis. But in the big data era, molecular profiling data size increases sharply due to new biological techniques, such as next generation sequencing. None of the existing systems work well whilst considering the three V features of big data (Volume, Variety, and Velocity). Massive scale data stores and collabourating data processing frameworks have been created to deal with the big data deluge. Hadoop Ecosystem, which includes HBase data store and MapReduce framework, has been worldly used for this purpose.
  *
- * Databases like Apache HBase and Google Bigtable can be modeled as Distributed Ordered Table (DOT). DOT horizontally partitions a table into regions and distributes regions to region servers by the Key. DOT further vertically partitions a region into groups (Family) and distributes Families to files (HFile). Multi-dimensional range queries on DOTs are fundamental requirements; however, none of existing data models work well for genetics while considering the three Vs.
+ * Experiment principles:
+ * 1. We controlled the virtual machine (VM) number, cpu core number, memory size, disk volume. For standalone implementations, we gave all the cpu, memory and disk resources to a single VM. For each distributed implementations, we gave them the same cluster, where same number of VM are used and the architecture in each VM. The cluster can fulfill the requirements of all distributed implementations and be re-used to deploy different implementations.
+ * 2. The target is to get the highest throughput in a clean environment.
+ * 3. Potential influence on performance evaluation accuracy: VM Hypervisor I/O schedule behaviours and internal network I/O noise can significantly affect the performance of distributed implementatio.. The workers in distributed implementation need to synchronize and collabourate with each other through network communications. These activities generate large quantities of I/O requests through network.
  *
- * A collabourative Genomic Data Model (GCDM) has been introduced to solve all these issues. GCDM creates three Collabourative Global Clustering Index Tables (CGCITs) for velocity and variety issues at the cost of limited extra volume. Microarray implementation of GCDM on HBase performed up to 10x faster than the popular SQL model on MySQL Cluster by using 1.5x larger disk space. SNP implementation of GCDM on HBase outperformed the popular SQL model on MySQL Cluster by up to 10 times at the cost of 3x larger volume. Raw sequence implementation of GCDM on HBase shows up to 10-fold velocity increasing by using 3xx larger volume.
- *
- * MapReduce is Single Program Multiple Data (SPMD) programming model and an associated implementation for processing and generating big data with a distributed algorithm on a thousands of nodes cluster. Most molecular profiling data based patient stratification can be parallelized by MapReduce to gain velocity. A popular hierarchical clustering algorithm has been used as an application to indicate how GCDM can influence the velocity of the algorithm.(how)
- *
+ * Discuss: what may influence the performance? 1. Internal communication, such as heartbeats and schedules, synchronizes workers and distributes tasks within quite short interval. For example, the HeartbeatIntervalDbApi in MySQL Cluster is 1.5 seconds by default; while HBase hbase.cells.scanned.per.heartbeat.check interval is around 10 seconds. 2. Loggers in different workers record the corresponding worker activities separately. Some logger may suffer from timeout during I/O busy time. 2. VM Hypervisor I/O scheduler. 3. Each time regions may be assigned to different region servers.
  *
  */
 
@@ -67,6 +66,7 @@ public class HBaseSQL {
     public HBaseSQL(String table) throws IOException {
         Configuration config = HBaseConfiguration.create();
         MicroarraySQLTable = new HTable(config, table);
+        //
     }
 
     public HBaseSQL(String main, String index) throws IOException {
@@ -476,7 +476,6 @@ public class HBaseSQL {
     }
 
     public static void main(String[] args) throws IOException {
-        // good
         if (args.length < 1) {
             printHelp();
             return;
@@ -503,5 +502,6 @@ public class HBaseSQL {
             printHelp();
     }
 }
+
 
 
