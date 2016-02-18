@@ -1,18 +1,16 @@
 /**
- *
+ * Created by sw1111 on 02/02/2016.
  *
  * Experiment principles:
  * 1. We controlled the virtual machine (VM) number, cpu core number, memory size, disk volume. For standalone implementations, we gave all the cpu, memory and disk resources to a single VM. For each distributed implementations, we gave them the same cluster, where same number of VM are used and the architecture in each VM. The cluster can fulfill the requirements of all distributed implementations and be re-used to deploy different implementations.
- * 2. The target is to get the highest throughput in a clean environment.
- * 3. Potential influence on performance evaluation accuracy: VM Hypervisor I/O schedule behaviours and internal network I/O noise can significantly affect the performance of distributed implementatio.. The workers in distributed implementation need to synchronize and collabourate with each other through network communications. These activities generate large quantities of I/O requests through network.
+ * 2. The target is to get the highest throughput in a clean environment.Potential influence on performance evaluation accuracy: VM Hypervisor I/O schedule behaviours and internal network I/O noise can significantly affect the performance of distributed implementation. The workers in distributed implementation need to synchronize and collabourate with each other through network communications. These activities generate large quantities of I/O requests through network.
  *
- * Discuss: what may influence the performance? 1. Internal communication, such as heartbeats and schedules, synchronizes workers and distributes tasks within quite short interval. For example, the HeartbeatIntervalDbApi in MySQL Cluster is 1.5 seconds by default; while HBase hbase.cells.scanned.per.heartbeat.check interval is around 10 seconds. 2. Loggers in different workers record the corresponding worker activities separately. Some logger may suffer from timeout during I/O busy time. 2. VM Hypervisor I/O scheduler. 3. Each time regions may be assigned to different region servers.
+ * Discuss: what may influence the performance? Internal 1. Internal communication, such as heartbeats and schedules, synchronizes workers and distributes tasks within quite short interval. For example, the HeartbeatIntervalDbApi in MySQL Cluster is 1.5 seconds by default; while HBase hbase.cells.scanned.per.heartbeat.check interval is around 10 seconds. These internal synchronization may disturb client data query requests. 2. Loggers record database behaviour in memory before any action actually happens and flush the information into permanent storage periodically. If any worker in a cluster is much busier than others, the Logger in this work may flush more often than others. Loggers in different workers record the corresponding worker activities separately in different time. Some Logger may suffer from timeout during I/O busy time. The server will throw an exception for the timeout and restart the Logger. During this period, the server cannot response any requests. Some Logger use local storage as permanent storage media and others may use remote storage. The former one will cause local disk I/O requests and the latter one will lead to network I/O requests. 3. Data location may be changed from time to time. For example, each time regions may be assigned to different region servers. 4. VM hypervisor I/O scheduler. The VM hypervisor, such as IC Cloud and OpenStack, controlled all the guest VMs in a physical server. Any VM requests are handled by the hypervisor and transferred to physical systems. If other VMs share the physical machine with the experimental VMs, requests from all VMs will be sent to the same queue. The same request in a VM may be executed for a longer time if other VMs send many requests at that moment.
  *
  */
 
 package dsi.kvmodel.microarray;
 
-import org.apache.avro.generic.GenericData;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.*;
 import org.apache.hadoop.hbase.client.*;
