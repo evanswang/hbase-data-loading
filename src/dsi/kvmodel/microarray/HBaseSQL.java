@@ -62,6 +62,8 @@ public class HBaseSQL {
     private static final String COL_FAMILY_INFO = "info";
     private HTable MicroarraySQLTable;
     private HTable indexTable;
+    private String msqlTableName;
+    private String indexTableName;
 
     public HBaseSQL(String table) throws IOException {
         Configuration config = HBaseConfiguration.create();
@@ -71,8 +73,10 @@ public class HBaseSQL {
 
     public HBaseSQL(String main, String index) throws IOException {
         Configuration config = HBaseConfiguration.create();
-        MicroarraySQLTable = new HTable(config, main);
-        indexTable = new HTable(config, index);
+        this.MicroarraySQLTable = new HTable(config, main);
+        this.indexTable = new HTable(config, index);
+        this.msqlTableName = main;
+        this.indexTableName = index;
     }
 
     public static void createTable(String tablename) {
@@ -461,24 +465,28 @@ public class HBaseSQL {
 
     public void scheduler (String study, String probeFileName, int threadNum) {
         for (int i = 0; i < threadNum; i++) {
-            Runnable r = new MultipleReader(indexTable, MicroarraySQLTable, study, probeFileName);
+            Runnable r = new MultipleReader(this.msqlTableName, this.indexTableName, study, probeFileName);
             Thread t = new Thread(r);
             t.start();
         }
     }
 
     private class MultipleReader implements Runnable {
-        private HTable indexTable;
-        private HTable msqlTable;
+        private String indexTableName;
+        private String msqlTableName;
         private String filename;
         private String study;
-        public MultipleReader (HTable indexTable, HTable msqlTable, String study, String filename) {
-            this.indexTable = indexTable;
-            this.msqlTable = msqlTable;
+        public MultipleReader (String msqlTableName, String indexTableName, String study, String filename) {
+            this.msqlTableName = msqlTableName;
+            this.indexTableName = indexTableName;
             this.filename = filename;
             this.study = study;
         }
         public void run() {
+            Configuration config = HBaseConfiguration.create();
+            HTable msqlTable;// = new HTable(config, this.msqlTableName);
+            HTable iTable;// = new HTable(config, this.indexTableName);
+
             long ts1 = System.currentTimeMillis();
             List<String> probeList = new ArrayList<String>();
             List<Get> getList = new ArrayList<Get>();
@@ -512,7 +520,8 @@ public class HBaseSQL {
             try {
                 // search index table to get all ids.
                 int psnum = 0;
-                Result[] results = indexTable.get(getList);
+                iTable = new HTable(config, this.indexTableName);
+                Result[] results = iTable.get(getList);
                 for (int i = 0; i < results.length; i++)
                     for (Cell kv : results[i].rawCells()) {
                         psnum++;
@@ -524,7 +533,7 @@ public class HBaseSQL {
                         getDataList.add(new Get(CellUtil.cloneValue(kv)));
                     }
                 long ts2 = System.currentTimeMillis();
-                System.out.println("total number is " + psnum
+                System.out.println("index total number is " + psnum
                         + ". execute time is " + (ts2 - ts1) + ". end time is "
                         + ts2);
             } catch (IOException e) {
@@ -533,13 +542,15 @@ public class HBaseSQL {
             try {
                 // search data table to get all data.
                 int psnum = 0;
-                Result[] results = msqlTable.get(getDataList);
-                for (int i = 0; i < results.length; i++)
-                    for (Cell kv : results[i].rawCells()) {
+                msqlTable = new HTable(config, this.msqlTableName);
+                for (Get get : getDataList) {
+                    Result result = msqlTable.get(get);
+                    for (Cell kv : result.rawCells()) {
                         psnum++;
                     }
+                }
                 long ts2 = System.currentTimeMillis();
-                System.out.println("total number is " + psnum
+                System.out.println("msql total number is " + psnum
                         + ". execute time is " + (ts2 - ts1) + ". end time is "
                         + ts2);
             } catch (IOException e) {
@@ -589,13 +600,11 @@ public class HBaseSQL {
             HBaseSQL sql = new HBaseSQL(args[1], args[2]);
             sql.searchBySubject(args[3], args[4], Integer.parseInt(args[5]));
         } else if (args[0].equals("search-probe")) {
-            // TODO test
+            // TODO test, maybe each get should has one table connection.
             HBaseSQL sql = new HBaseSQL(args[1], args[2]);
             sql.scheduler(args[3], args[4], Integer.parseInt(args[5]));
         } else
             printHelp();
     }
 }
-
-
 
