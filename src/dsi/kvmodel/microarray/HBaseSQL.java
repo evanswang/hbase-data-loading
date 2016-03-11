@@ -463,9 +463,17 @@ public class HBaseSQL {
         }
     }
 
-    public void scheduler (String study, String probeFileName, int threadNum) {
+    public void scheduler (String study, String probeFileName, int threadNum) throws IOException {
         for (int i = 0; i < threadNum; i++) {
             Runnable r = new MultipleReader(this.msqlTableName, this.indexTableName, study, probeFileName);
+            Thread t = new Thread(r);
+            t.start();
+        }
+    }
+
+    public void schedulerCross (List<String> studyList, String probeFileName, int threadNum) throws IOException {
+        for (int i = 0; i < threadNum; i++) {
+            Runnable r = new MultipleReader(this.msqlTableName, this.indexTableName, studyList, probeFileName);
             Thread t = new Thread(r);
             t.start();
         }
@@ -476,16 +484,30 @@ public class HBaseSQL {
         private String msqlTableName;
         private String filename;
         private String study;
-        public MultipleReader (String msqlTableName, String indexTableName, String study, String filename) {
+        private List<String> studyList;
+        private HTable msqlTable;//
+        private HTable indexTable;// = new HTable(config, this.indexTableName);
+        public MultipleReader (String msqlTableName, String indexTableName, String study, String filename) throws IOException {
+            Configuration config = HBaseConfiguration.create();
             this.msqlTableName = msqlTableName;
             this.indexTableName = indexTableName;
             this.filename = filename;
             this.study = study;
+            this.msqlTable = new HTable(config, this.msqlTableName);
+            this.indexTable = new HTable(config, this.indexTableName);
         }
-        public void run() {
+
+        public MultipleReader (String msqlTableName, String indexTableName, List<String> studyList, String filename) throws IOException {
             Configuration config = HBaseConfiguration.create();
-            HTable msqlTable;// = new HTable(config, this.msqlTableName);
-            HTable iTable;// = new HTable(config, this.indexTableName);
+            this.msqlTableName = msqlTableName;
+            this.indexTableName = indexTableName;
+            this.filename = filename;
+            this.studyList = studyList;
+            this.msqlTable = new HTable(config, this.msqlTableName);
+            this.indexTable = new HTable(config, this.indexTableName);
+        }
+
+        public void run() {
 
             long ts1 = System.currentTimeMillis();
             List<String> probeList = new ArrayList<String>();
@@ -512,16 +534,23 @@ public class HBaseSQL {
             }
 
             for (int i = 0; i < 100; i++) {
-                Get get = new Get(Bytes.toBytes(study + ":" + probeList.get(ThreadLocalRandom.current().nextInt(0, probeList.size() + 1))));
-                get.addFamily(Bytes.toBytes(COL_FAMILY_INFO));
-                getList.add(get);
+                if (this.indexTableName.startsWith("study")) {
+                    Get get = new Get(Bytes.toBytes(this.study + ":" + probeList.get(ThreadLocalRandom.current().nextInt(0, probeList.size()))));
+                    get.addFamily(Bytes.toBytes(COL_FAMILY_INFO));
+                    getList.add(get);
+                } else if (this.indexTableName.startsWith("probeid")) {
+                    for (String study : this.studyList) {
+                        Get get = new Get(Bytes.toBytes(probeList.get(ThreadLocalRandom.current().nextInt(0, probeList.size())) + ":" + study));
+                        getList.add(get);
+                    }
+                }
             }
 
             try {
                 // search index table to get all ids.
                 int psnum = 0;
-                iTable = new HTable(config, this.indexTableName);
-                Result[] results = iTable.get(getList);
+                //iTable = new HTable(config, this.indexTableName);
+                Result[] results = this.indexTable.get(getList);
                 for (int i = 0; i < results.length; i++)
                     for (Cell kv : results[i].rawCells()) {
                         psnum++;
@@ -542,9 +571,9 @@ public class HBaseSQL {
             try {
                 // search data table to get all data.
                 int psnum = 0;
-                msqlTable = new HTable(config, this.msqlTableName);
+                //msqlTable = new HTable(config, this.msqlTableName);
                 for (Get get : getDataList) {
-                    Result result = msqlTable.get(get);
+                    Result result = this.msqlTable.get(get);
                     for (Cell kv : result.rawCells()) {
                         psnum++;
                     }
@@ -568,7 +597,8 @@ public class HBaseSQL {
         System.out.println("count for count records from the table, parameter table, start key, end key, threshold, data file, cache size");
         System.out.println("index for generating secondary index from main table to index table, parameter main table, index table, column 1, column 2, column 3, cache size");
         System.out.println("search-subject for fetching all records from the main table using the index table, parameter main table, index table, study name, file name, cache size");
-        System.out.println("search-probe for fetching all records from the main table using the index table, parameter main table, index table, study name, file name, cache size");
+        System.out.println("search-probe for fetching all records from the main table using the index table, parameter main table, index table, study name, probe file name, cache size");
+        System.out.println("cross-search-probe for fetching all records from the main table using the index table, parameter main table, index table, probe file name, cache size, study 1, study2, ...");
         System.out.println("* __________________________________________________");
         System.out.println("* _____________key_____________________|            ");
         System.out.println("*   row key     |____column key________|    value   ");
@@ -600,9 +630,15 @@ public class HBaseSQL {
             HBaseSQL sql = new HBaseSQL(args[1], args[2]);
             sql.searchBySubject(args[3], args[4], Integer.parseInt(args[5]));
         } else if (args[0].equals("search-probe")) {
-            // TODO test, maybe each get should has one table connection.
             HBaseSQL sql = new HBaseSQL(args[1], args[2]);
             sql.scheduler(args[3], args[4], Integer.parseInt(args[5]));
+        } else if (args[0].equals("cross-search-probe")) {
+            // para: main table, index table, probe file, thread number, study 1, study2, ...
+            List<String> studyList = new ArrayList<String>();
+            for (int i = 5; i < args.length; i++)
+                studyList.add(args[i]);
+            HBaseSQL sql = new HBaseSQL(args[1], args[2]);
+            sql.schedulerCross(studyList, args[3], Integer.parseInt(args[4]));
         } else
             printHelp();
     }
