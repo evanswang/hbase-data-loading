@@ -1,12 +1,6 @@
 /**
+ * Created by sw1111 on 02/02/2016.
  *
- *
- * Experiment principles:
- * 1. We controlled the virtual machine (VM) number, cpu core number, memory size, disk volume. For standalone implementations, we gave all the cpu, memory and disk resources to a single VM. For each distributed implementations, we gave them the same cluster, where same number of VM are used and the architecture in each VM. The cluster can fulfill the requirements of all distributed implementations and be re-used to deploy different implementations.
- * 2. The target is to get the highest throughput in a clean environment.
- * 3. Potential influence on performance evaluation accuracy: VM Hypervisor I/O schedule behaviours and internal network I/O noise can significantly affect the performance of distributed implementatio.. The workers in distributed implementation need to synchronize and collabourate with each other through network communications. These activities generate large quantities of I/O requests through network.
- *
- * Discuss: what may influence the performance? 1. Internal communication, such as heartbeats and schedules, synchronizes workers and distributes tasks within quite short interval. For example, the HeartbeatIntervalDbApi in MySQL Cluster is 1.5 seconds by default; while HBase hbase.cells.scanned.per.heartbeat.check interval is around 10 seconds. 2. Loggers in different workers record the corresponding worker activities separately. Some logger may suffer from timeout during I/O busy time. 2. VM Hypervisor I/O scheduler. 3. Each time regions may be assigned to different region servers.
  *
  */
 
@@ -24,6 +18,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.StringTokenizer;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * Created by sw1111 on 02/02/2016.
@@ -62,6 +57,8 @@ public class HBaseSQL {
     private static final String COL_FAMILY_INFO = "info";
     private HTable MicroarraySQLTable;
     private HTable indexTable;
+    private String msqlTableName;
+    private String indexTableName;
 
     public HBaseSQL(String table) throws IOException {
         Configuration config = HBaseConfiguration.create();
@@ -71,8 +68,10 @@ public class HBaseSQL {
 
     public HBaseSQL(String main, String index) throws IOException {
         Configuration config = HBaseConfiguration.create();
-        MicroarraySQLTable = new HTable(config, main);
-        indexTable = new HTable(config, index);
+        this.MicroarraySQLTable = new HTable(config, main);
+        this.indexTable = new HTable(config, index);
+        this.msqlTableName = main;
+        this.indexTableName = index;
     }
 
     public static void createTable(String tablename) {
@@ -459,6 +458,131 @@ public class HBaseSQL {
         }
     }
 
+    public void scheduler (String study, String probeFileName, int threadNum) throws IOException {
+        for (int i = 0; i < threadNum; i++) {
+            Runnable r = new MultipleReader(this.msqlTableName, this.indexTableName, study, probeFileName);
+            Thread t = new Thread(r);
+            t.start();
+        }
+    }
+
+    public void schedulerCross (List<String> studyList, String probeFileName, int threadNum) throws IOException {
+        for (int i = 0; i < threadNum; i++) {
+            Runnable r = new MultipleReader(this.msqlTableName, this.indexTableName, studyList, probeFileName);
+            Thread t = new Thread(r);
+            t.start();
+        }
+    }
+
+    private class MultipleReader implements Runnable {
+        private String indexTableName;
+        private String msqlTableName;
+        private String filename;
+        private String study;
+        private List<String> studyList;
+        private HTable msqlTable;//
+        private HTable indexTable;// = new HTable(config, this.indexTableName);
+        public MultipleReader (String msqlTableName, String indexTableName, String study, String filename) throws IOException {
+            Configuration config = HBaseConfiguration.create();
+            this.msqlTableName = msqlTableName;
+            this.indexTableName = indexTableName;
+            this.filename = filename;
+            this.study = study;
+            this.msqlTable = new HTable(config, this.msqlTableName);
+            this.indexTable = new HTable(config, this.indexTableName);
+        }
+
+        public MultipleReader (String msqlTableName, String indexTableName, List<String> studyList, String filename) throws IOException {
+            Configuration config = HBaseConfiguration.create();
+            this.msqlTableName = msqlTableName;
+            this.indexTableName = indexTableName;
+            this.filename = filename;
+            this.studyList = studyList;
+            this.msqlTable = new HTable(config, this.msqlTableName);
+            this.indexTable = new HTable(config, this.indexTableName);
+        }
+
+        public void run() {
+
+            long ts1 = System.currentTimeMillis();
+            List<String> probeList = new ArrayList<String>();
+            List<Get> getList = new ArrayList<Get>();
+            List<Get> getDataList = new ArrayList<Get>();
+            BufferedReader br = null;
+            String str = null;
+            try {
+                // read all probe list
+                br = new BufferedReader(new FileReader(new File(filename)));
+                while ((str = br.readLine()) != null) {
+                    probeList.add(str);
+                }
+            } catch (FileNotFoundException e1) {
+                e1.printStackTrace();
+            } catch (IOException e) {
+                e.printStackTrace();
+            } finally {
+                try {
+                    br.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+
+            for (int i = 0; i < 100; i++) {
+                if (this.indexTableName.startsWith("study")) {
+                    Get get = new Get(Bytes.toBytes(this.study + ":" + probeList.get(ThreadLocalRandom.current().nextInt(0, probeList.size()))));
+                    get.addFamily(Bytes.toBytes(COL_FAMILY_INFO));
+                    getList.add(get);
+                } else if (this.indexTableName.startsWith("probeid")) {
+                    for (String study : this.studyList) {
+                        Get get = new Get(Bytes.toBytes(probeList.get(ThreadLocalRandom.current().nextInt(0, probeList.size())) + ":" + study));
+                        getList.add(get);
+                    }
+                }
+            }
+
+            try {
+                // search index table to get all ids.
+                int psnum = 0;
+                //iTable = new HTable(config, this.indexTableName);
+                Result[] results = this.indexTable.get(getList);
+                for (int i = 0; i < results.length; i++)
+                    for (Cell kv : results[i].rawCells()) {
+                        psnum++;
+                        // each kv represents a column
+                        //System.out.println(Bytes.toString(CellUtil.cloneRow(kv)));
+                        //System.out.println(Bytes.toString(CellUtil.cloneFamily(kv)));
+                        //System.out.println(Bytes.toString(CellUtil.cloneQualifier(kv)));
+                        //System.out.println(Bytes.toString(CellUtil.cloneValue(kv)));
+                        getDataList.add(new Get(CellUtil.cloneValue(kv)));
+                    }
+                long ts2 = System.currentTimeMillis();
+                System.out.println("index total number is " + psnum
+                        + ". execute time is " + (ts2 - ts1) + ". end time is "
+                        + ts2);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            try {
+                // search data table to get all data.
+                int psnum = 0;
+                //msqlTable = new HTable(config, this.msqlTableName);
+                for (Get get : getDataList) {
+                    Result result = this.msqlTable.get(get);
+                    for (Cell kv : result.rawCells()) {
+                        psnum++;
+                    }
+                }
+                long ts2 = System.currentTimeMillis();
+                System.out.println("msql total number is " + psnum
+                        + ". execute time is " + (ts2 - ts1) + ". end time is "
+                        + ts2);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
     public static void printHelp() {
         System.out.println("This class implement SQL model in a HBase");
         System.out.println("please input an argument");
@@ -468,6 +592,8 @@ public class HBaseSQL {
         System.out.println("count for count records from the table, parameter table, start key, end key, threshold, data file, cache size");
         System.out.println("index for generating secondary index from main table to index table, parameter main table, index table, column 1, column 2, column 3, cache size");
         System.out.println("search-subject for fetching all records from the main table using the index table, parameter main table, index table, study name, file name, cache size");
+        System.out.println("search-probe for fetching all records from the main table using the index table, parameter main table, index table, study name, probe file name, cache size");
+        System.out.println("cross-search-probe for fetching all records from the main table using the index table, parameter main table, index table, probe file name, cache size, study 1, study2, ...");
         System.out.println("* __________________________________________________");
         System.out.println("* _____________key_____________________|            ");
         System.out.println("*   row key     |____column key________|    value   ");
@@ -498,10 +624,18 @@ public class HBaseSQL {
         } else if (args[0].equals("search-subject")) {
             HBaseSQL sql = new HBaseSQL(args[1], args[2]);
             sql.searchBySubject(args[3], args[4], Integer.parseInt(args[5]));
+        } else if (args[0].equals("search-probe")) {
+            HBaseSQL sql = new HBaseSQL(args[1], args[2]);
+            sql.scheduler(args[3], args[4], Integer.parseInt(args[5]));
+        } else if (args[0].equals("cross-search-probe")) {
+            // para: main table, index table, probe file, thread number, study 1, study2, ...
+            List<String> studyList = new ArrayList<String>();
+            for (int i = 5; i < args.length; i++)
+                studyList.add(args[i]);
+            HBaseSQL sql = new HBaseSQL(args[1], args[2]);
+            sql.schedulerCross(studyList, args[3], Integer.parseInt(args[4]));
         } else
             printHelp();
     }
 }
-
-
 
