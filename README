@@ -1,3 +1,4 @@
 hbase-0.96.0
 hadoop-1.0.3
+uncompress tar.gz data using `tar xzf datafile.tar.gz` 
 insertMatrixBySubject for insert microarray data
