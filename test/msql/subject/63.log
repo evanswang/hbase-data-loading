@@ -1,9 +1,0 @@
-cache 5000, 1353.219 seconds
-cache 5000, 1307.443 seconds
-cache 50000, 1422.708 seconds
-cache 30000, 1294.939 s
-cache 30000, 956.076 s, after split with a high locality
-cache 30000, 936.814 s
-cache 30000, 714.228s, 11.30 11/02/2016
-cache 30000, 1047.691, 12.00 11/02/2016
-569.950s

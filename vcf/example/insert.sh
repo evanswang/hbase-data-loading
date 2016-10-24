@@ -1,1 +1,1 @@
-./runb.sh insert vcf CELL-LINE $1 10000
+./runb.sh insert vcf CELL-LINE $1 1000
